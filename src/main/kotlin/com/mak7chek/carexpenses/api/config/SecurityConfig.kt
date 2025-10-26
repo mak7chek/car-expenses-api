@@ -21,41 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 class SecurityConfig(
     private val jwtAuthFilter: JwtAuthenticationFilter,
-    private val userRepository: UserRepository
-) {
-
-    @Bean
-    fun passwordEncoder(): PasswordEncoder {
-        return BCryptPasswordEncoder()
-    }
-
-    @Bean
-    fun userDetailsService(): UserDetailsService {
-        return UserDetailsService { email ->
-            val user = userRepository.findByEmail(email)
-                .orElseThrow { UsernameNotFoundException("User not found with email: $email") }
-
-            org.springframework.security.core.userdetails.User(
-                user.email,
-                user.passwordHash,
-                emptyList() // TODO: тут можна додати ролі, якщо вони будуть
-            )
-        }
-    }
-
-    @Bean
-    fun authenticationProvider(): AuthenticationProvider {
-        val authProvider = DaoAuthenticationProvider()
-        authProvider.setUserDetailsService(userDetailsService())
-        authProvider.setPasswordEncoder(passwordEncoder())
-        return authProvider
-    }
-
-    @Bean
-    fun authenticationManager(config: AuthenticationConfiguration): AuthenticationManager {
-        return config.authenticationManager
-    }
-
+    private val authenticationProvider: AuthenticationProvider) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
@@ -70,11 +36,10 @@ class SecurityConfig(
                     ).permitAll()
                     .anyRequest().authenticated()
             }
-
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
-            .authenticationProvider(authenticationProvider())
+            .authenticationProvider(authenticationProvider)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter::class.java)
 
         return http.build()
