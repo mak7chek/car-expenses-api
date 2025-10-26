@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service
 @Service
 class AuthService(
     private val userRepository: UserRepository,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val jwtService: JwtService
 ) {
 
     fun register(request: AuthRequest): AuthResponse {
@@ -29,12 +30,13 @@ class AuthService(
         )
 
         val savedUser = userRepository.save(newUser)
-
+        val token = jwtService.generateToken(savedUser)
         // 5. Повертаємо відповідь
         return AuthResponse(
             userId = savedUser.id!!,
             email = savedUser.email,
-            message = "Реєстрація успішна"
+            message = "Реєстрація успішна",
+            token = token
         )
     }
 
@@ -46,12 +48,13 @@ class AuthService(
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw IllegalArgumentException("Неправильний пароль")
         }
-
+        val token = jwtService.generateToken(user)
         // 3. Повертаємо відповідь
         return AuthResponse(
             userId = user.id!!,
             email = user.email,
-            message = "Вхід успішний"
+            message = "Вхід успішний",
+            token = token
         )
     }
 }
