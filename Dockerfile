@@ -19,7 +19,7 @@ RUN gradle build -x test
 
 # Етап 2: ЗАПУСК (наш "гараж")
 # Беремо чистий і маленький образ тільки з Java 17
-FROM openjdk:17-slim
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Ось вона, наша команда!
