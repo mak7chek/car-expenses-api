@@ -8,4 +8,6 @@ import org.springframework.stereotype.Repository
 interface TripRepository : JpaRepository<Trip, Long> {
 
     fun findByUserId(userId: Long): List<Trip>
+    fun deleteAllByUserId(userId: Long)
+
 }

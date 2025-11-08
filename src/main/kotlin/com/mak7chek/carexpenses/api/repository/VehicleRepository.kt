@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository
 interface VehicleRepository : JpaRepository<Vehicle, Long> {
 
     fun findByUserId(userId: Long): List<Vehicle>
+    fun deleteAllByUserId(userId: Long)
 }

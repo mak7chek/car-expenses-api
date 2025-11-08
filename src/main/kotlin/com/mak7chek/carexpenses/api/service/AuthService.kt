@@ -19,7 +19,6 @@ class AuthService(
             throw IllegalArgumentException("Email ${request.email} вже використовується")
         }
 
-        // 2. Хешуємо пароль
         val hashedPassword = passwordEncoder.encode(request.password)
 
         val newUser = User(
@@ -31,7 +30,6 @@ class AuthService(
 
         val savedUser = userRepository.save(newUser)
         val token = jwtService.generateToken(savedUser)
-        // 5. Повертаємо відповідь
         return AuthResponse(
             userId = savedUser.id!!,
             email = savedUser.email,
@@ -44,12 +42,10 @@ class AuthService(
         val user = userRepository.findByEmail(request.email)
             .orElseThrow { IllegalArgumentException("Користувача з таким email не знайдено") }
 
-        // 2. Перевіряємо пароль
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw IllegalArgumentException("Неправильний пароль")
         }
         val token = jwtService.generateToken(user)
-        // 3. Повертаємо відповідь
         return AuthResponse(
             userId = user.id!!,
             email = user.email,
