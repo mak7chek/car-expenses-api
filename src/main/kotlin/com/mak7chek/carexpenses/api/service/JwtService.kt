@@ -5,6 +5,7 @@ import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.stereotype.Service
 import java.util.Date
 import javax.crypto.SecretKey
@@ -18,8 +19,7 @@ class JwtService(
         Keys.hmacShaKeyFor(secretKeyString.toByteArray())
     }
 
-    private val expirationTimeMs: Long = 1000 * 60 * 60 * 10
-
+    private val expirationTimeMs: Long = 1000L * 60 * 60 * 24 * 30
     // --- ГОЛОВНІ МЕТОДИ ---
 
     // 3. Генерація токена для користувача
@@ -44,18 +44,24 @@ class JwtService(
             .parseSignedClaims(token)
             .payload
     }
+    private fun getExpirationDateFromToken(token: String): Date {
+        return getAllClaimsFromToken(token).expiration
+    }
 
+    private fun isTokenExpired(token: String): Boolean {
+        return try {
+            val expirationDate = getExpirationDateFromToken(token)
+            expirationDate.before(Date())
+        } catch (e: Exception) {
+            true
+        }
+    }
     fun getEmailFromToken(token: String): String {
         return getAllClaimsFromToken(token).subject
     }
 
-    fun isTokenValid(token: String): Boolean {
-        return try {
-            val claims = getAllClaimsFromToken(token)
-            val expiration = claims.expiration
-            !expiration.before(Date())
-        } catch (e: Exception) {
-            false
-        }
+    fun isTokenValid(token: String, userDetails: UserDetails): Boolean {
+        val email = getEmailFromToken(token)
+        return (email == userDetails.username) && !isTokenExpired(token)
     }
 }

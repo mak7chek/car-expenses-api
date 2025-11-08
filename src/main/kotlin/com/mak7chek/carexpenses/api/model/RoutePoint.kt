@@ -12,7 +12,7 @@ data class RoutePoint(
 
     val latitude: Double,
     val longitude: Double,
-    val timestamp: LocalDateTime,
+    val timestamp: Long,
 
     // --- Зв'язок ---
     @ManyToOne(fetch = FetchType.LAZY)
