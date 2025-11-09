@@ -16,7 +16,7 @@ data class Trip(
     var totalDistanceKm: Double = 0.0,
     var totalFuelConsumedL: Double = 0.0,
 
-    val notes: String? = null,
+    var notes: String? = null,
 
     // --- Зв'язки ---
     @ManyToOne(fetch = FetchType.LAZY)

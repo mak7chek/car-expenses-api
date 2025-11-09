@@ -10,7 +10,7 @@ data class Vehicle(
     val id: Long? = null,
 
     @Column(nullable = false)
-    val name: String, // Наприклад, "Моя синя Audi"
+    val name: String,
 
     val make: String? = null, // "Audi"
     val model: String? = null, // "A6"
@@ -18,7 +18,10 @@ data class Vehicle(
     @Column(nullable = false)
     val avgConsumptionLitersPer100Km: Double,
 
-    // --- Зв'язок ---
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val fuelType: FuelType,
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     val user: User

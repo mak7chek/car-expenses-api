@@ -1,35 +1,35 @@
 package com.mak7chek.carexpenses.api.service
 
+import com.mak7chek.carexpenses.api.controller.NoteUpdateRequest
 import com.mak7chek.carexpenses.api.dto.*
 import com.mak7chek.carexpenses.api.model.RoutePoint
 import com.mak7chek.carexpenses.api.model.Trip
+import com.mak7chek.carexpenses.api.repository.FuelPriceRepository
+import com.mak7chek.carexpenses.api.repository.RoutePointRepository
 import com.mak7chek.carexpenses.api.repository.TripRepository
 import com.mak7chek.carexpenses.api.repository.UserRepository
 import com.mak7chek.carexpenses.api.repository.VehicleRepository
 import com.mak7chek.carexpenses.api.util.HaversineCalculator
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 @Service
 class TripService(
     private val tripRepository: TripRepository,
     private val userRepository: UserRepository,
-    private val vehicleRepository: VehicleRepository
+    private val vehicleRepository: VehicleRepository,
+    private val fuelPriceRepository: FuelPriceRepository,
+    private val routePointRepository: RoutePointRepository
 ) {
 
-    // --- DTO Маппери (хелпер-функції) ---
+    // --- DTO Маппери ---
 
-    private fun RoutePoint.toResponse(): RoutePointResponse {
-        return RoutePointResponse(
-            latitude = this.latitude,
-            longitude = this.longitude,
-            timestamp = this.timestamp
-        )
-    }
-
+    // 4. "ЛЕГКИЙ" МАППЕР (для списків)
     private fun Trip.toResponse(): TripResponse {
         return TripResponse(
             id = this.id!!,
@@ -39,8 +39,32 @@ class TripService(
             totalFuelConsumedL = this.totalFuelConsumedL,
             notes = this.notes,
             vehicleName = this.vehicle.name,
-            vehicleId = this.vehicle.id!!,
-            routePoints = this.routePoints.map { it.toResponse() }
+            vehicleId = this.vehicle.id!!
+        )
+    }
+
+    private fun Trip.toDetailResponse(pricePerLiter: Double, totalCost: Double): TripDetailResponse {
+        return TripDetailResponse(
+            id = this.id!!,
+            startTime = this.startTime,
+            endTime = this.endTime,
+            notes = this.notes,
+            vehicleName = this.vehicle.name,
+            fuelType = this.vehicle.fuelType,
+            totalDistanceKm = this.totalDistanceKm,
+            avgConsumption = this.vehicle.avgConsumptionLitersPer100Km,
+            totalFuelConsumedL = this.totalFuelConsumedL,
+            pricePerLiter = pricePerLiter,
+            totalCost = totalCost,
+            routePoints = this.routePoints.sortedBy { it.timestamp }.map { it.toResponse() }
+        )
+    }
+
+    private fun RoutePoint.toResponse(): RoutePointResponse {
+        return RoutePointResponse(
+            latitude = this.latitude,
+            longitude = this.longitude,
+            timestamp = this.timestamp
         )
     }
 
@@ -76,7 +100,6 @@ class TripService(
         val trip = tripRepository.findById(tripId)
             .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
 
-        // Перевірка безпеки
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
@@ -94,24 +117,17 @@ class TripService(
             )
         }
 
-        val updatedTrip = trip.copy(
-            routePoints = trip.routePoints + newPoints
-        )
-
-        tripRepository.save(updatedTrip)
+        routePointRepository.saveAll(newPoints)
     }
 
     @Transactional
-    fun endTrip(tripId: Long, userEmail: String): TripResponse {
+    fun endTrip(tripId: Long, userEmail: String): ResponseEntity<Any> {
         val trip = tripRepository.findById(tripId)
             .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
 
-        // Перевірка безпеки
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
-
-        // --- ГОЛОВНА ЛОГІКА РОЗРАХУНКІВ ---
 
         val points = trip.routePoints.sortedBy { it.timestamp }
         var totalDistance = 0.0
@@ -136,38 +152,68 @@ class TripService(
             totalFuelConsumedL = totalFuel
         )
 
-        val savedTrip = tripRepository.save(finishedTrip)
-        return savedTrip.toResponse()
+        tripRepository.save(finishedTrip)
+        return ResponseEntity.ok(mapOf("message" to "Поїздку завершено"))
     }
 
     @Transactional(readOnly = true)
-    fun getTripsForUser(userEmail: String): List<TripResponse> {
+    fun getTripsForUser(
+        userEmail: String,
+        search: String?,
+        vehicleId: Long?,
+        dateFrom: LocalDate?,
+        dateTo: LocalDate?
+    ): List<TripResponse> {
         val user = userRepository.findByEmail(userEmail)
             .orElseThrow { UsernameNotFoundException("Користувача не знайдено") }
 
-        return tripRepository.findByUserId(user.id!!)
+        var spec = TripSpecification.hasUser(user)
+
+        spec = spec.and(TripSpecification.containsNote(search))
+        spec = spec.and(TripSpecification.hasVehicle(vehicleId))
+        spec = spec.and(TripSpecification.isBetweenDates(dateFrom, dateTo))
+
+        return tripRepository.findAll(spec)
             .map { it.toResponse() }
     }
 
     @Transactional(readOnly = true)
-    fun getTripDetails(tripId: Long, userEmail: String): TripResponse {
-        val trip = tripRepository.findById(tripId)
+    fun getTripDetails(tripId: Long, userEmail: String): TripDetailResponse {
+        val trip = tripRepository.findTripWithDetails(tripId)
             .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
 
-        // Перевірка безпеки
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
 
-        return trip.toResponse()
+        val fuelPrice = fuelPriceRepository.findByUserAndFuelType(trip.user, trip.vehicle.fuelType)
+            .orElse(null)
+        val pricePerLiter = fuelPrice?.pricePerLiter ?: 0.0
+
+        val totalCost = trip.totalFuelConsumedL * pricePerLiter
+
+        return trip.toDetailResponse(pricePerLiter, totalCost)
     }
+
+    @Transactional
+    fun updateTripNotes(tripId: Long, userEmail: String, request: NoteUpdateRequest) {
+        val trip = tripRepository.findById(tripId)
+            .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
+
+        if (trip.user.email != userEmail) {
+            throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
+        }
+
+        trip.notes = request.notes
+        tripRepository.save(trip)
+    }
+
 
     @Transactional
     fun deleteTrip(tripId: Long, userEmail: String) {
         val trip = tripRepository.findById(tripId)
             .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
 
-        // Перевірка безпеки
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }

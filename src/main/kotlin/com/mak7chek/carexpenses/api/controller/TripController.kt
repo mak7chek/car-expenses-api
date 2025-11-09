@@ -8,13 +8,16 @@ import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.web.bind.annotation.*
+import java.time.LocalDate
+
+data class NoteUpdateRequest(val notes: String?)
+
 
 @RestController
-@RequestMapping("/api/trips")
+@RequestMapping("/api/v1/trips")
 class TripController(
     private val tripService: TripService
 ) {
-
 
     private fun getUserEmail(userDetails: UserDetails?): String {
         return userDetails?.username
@@ -65,8 +68,7 @@ class TripController(
     ): ResponseEntity<Any> {
         return try {
             val userEmail = getUserEmail(userDetails)
-            val tripResponse = tripService.endTrip(id, userEmail)
-            ResponseEntity.ok(tripResponse)
+            tripService.endTrip(id, userEmail)
         } catch (e: NoSuchElementException) {
             ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
         } catch (e: AccessDeniedException) {
@@ -76,10 +78,14 @@ class TripController(
 
     @GetMapping
     fun getAllUserTrips(
-        @AuthenticationPrincipal userDetails: UserDetails?
+        @AuthenticationPrincipal userDetails: UserDetails?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) vehicleId: Long?,
+        @RequestParam(required = false) dateFrom: LocalDate?,
+        @RequestParam(required = false) dateTo: LocalDate?
     ): ResponseEntity<List<TripResponse>> {
         val userEmail = getUserEmail(userDetails)
-        val trips = tripService.getTripsForUser(userEmail)
+        val trips = tripService.getTripsForUser(userEmail, search, vehicleId, dateFrom, dateTo)
         return ResponseEntity.ok(trips)
     }
 
@@ -87,11 +93,23 @@ class TripController(
     fun getTripDetails(
         @PathVariable id: Long,
         @AuthenticationPrincipal userDetails: UserDetails?
+    ): ResponseEntity<TripDetailResponse> {
+
+        val userEmail = getUserEmail(userDetails)
+        val trip = tripService.getTripDetails(id, userEmail)
+        return ResponseEntity.ok(trip)
+    }
+
+    @PutMapping("/{id}/notes")
+    fun updateTripNotes(
+        @PathVariable id: Long,
+        @AuthenticationPrincipal userDetails: UserDetails?,
+        @RequestBody request: NoteUpdateRequest
     ): ResponseEntity<Any> {
         return try {
             val userEmail = getUserEmail(userDetails)
-            val trip = tripService.getTripDetails(id, userEmail)
-            ResponseEntity.ok(trip)
+            tripService.updateTripNotes(id, userEmail, request)
+            ResponseEntity.ok(mapOf("message" to "Нотатку оновлено"))
         } catch (e: NoSuchElementException) {
             ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
         } catch (e: AccessDeniedException) {
