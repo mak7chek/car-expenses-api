@@ -14,7 +14,7 @@ data class NoteUpdateRequest(val notes: String?)
 
 
 @RestController
-@RequestMapping("/api/v1/trips")
+@RequestMapping("/api/trips")
 class TripController(
     private val tripService: TripService
 ) {
