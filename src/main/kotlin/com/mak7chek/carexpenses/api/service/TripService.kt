@@ -44,13 +44,16 @@ class TripService(
     }
 
     private fun Trip.toDetailResponse(pricePerLiter: Double, totalCost: Double): TripDetailResponse {
+        val vehicle = this.vehicle
+        val vehicleFuelType = vehicle.fuelType
+            ?: throw IllegalStateException("Помилка: Автомобіль ${vehicle.name} (ID: ${vehicle.id}) не має типу палива. Завершіть міграцію.")
         return TripDetailResponse(
             id = this.id!!,
             startTime = this.startTime,
             endTime = this.endTime,
             notes = this.notes,
             vehicleName = this.vehicle.name,
-            fuelType = this.vehicle.fuelType,
+            fuelType = vehicleFuelType,
             totalDistanceKm = this.totalDistanceKm,
             avgConsumption = this.vehicle.avgConsumptionLitersPer100Km,
             totalFuelConsumedL = this.totalFuelConsumedL,
@@ -185,8 +188,10 @@ class TripService(
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
-
-        val fuelPrice = fuelPriceRepository.findByUserAndFuelType(trip.user, trip.vehicle.fuelType)
+        val vehicle = trip.vehicle
+        val vehicleFuelType = vehicle.fuelType
+            ?: throw IllegalStateException("Помилка: Автомобіль ${vehicle.name} (ID: ${vehicle.id}) не має типу палива. Завершіть міграцію.")
+        val fuelPrice = fuelPriceRepository.findByUserAndFuelType(trip.user, vehicleFuelType)
             .orElse(null)
         val pricePerLiter = fuelPrice?.pricePerLiter ?: 0.0
 

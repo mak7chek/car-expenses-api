@@ -19,8 +19,8 @@ data class Vehicle(
     val avgConsumptionLitersPer100Km: Double,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    val fuelType: FuelType,
+    @Column(nullable = true)
+    val fuelType: FuelType?,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

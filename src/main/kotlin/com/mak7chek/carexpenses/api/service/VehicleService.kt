@@ -15,7 +15,6 @@ class VehicleService(
     private val vehicleRepository: VehicleRepository,
     private val userRepository: UserRepository
 ) {
-    // ---- Приватна helper-функція для мапінгу ----
     private fun Vehicle.toResponse(): VehicleResponse {
         return VehicleResponse(
             id = this.id!!,
@@ -23,10 +22,10 @@ class VehicleService(
             make = this.make,
             model = this.model,
             year = this.year,
-            avgConsumptionLitersPer100Km = this.avgConsumptionLitersPer100Km
+            avgConsumptionLitersPer100Km = this.avgConsumptionLitersPer100Km,
+            fuelType = this.fuelType
         )
     }
-    // ---- Публічні методи ----
 
     @Transactional(readOnly = true)
     fun getVehiclesForUser(userEmail: String): List<VehicleResponse> {
@@ -34,7 +33,7 @@ class VehicleService(
             .orElseThrow { UsernameNotFoundException("Користувача не знайдено") }
 
         return vehicleRepository.findByUserId(user.id!!)
-            .map { it.toResponse() }
+            .map { it.toResponse() } // Це автоматично підхопить зміни
     }
 
     @Transactional
@@ -48,7 +47,8 @@ class VehicleService(
             model = request.model,
             year = request.year,
             avgConsumptionLitersPer100Km = request.avgConsumptionLitersPer100Km,
-            user = user
+            fuelType = request.fuelType,
+        user = user
         )
 
         val savedVehicle = vehicleRepository.save(newVehicle)
@@ -69,7 +69,8 @@ class VehicleService(
             make = request.make,
             model = request.model,
             year = request.year,
-            avgConsumptionLitersPer100Km = request.avgConsumptionLitersPer100Km
+            avgConsumptionLitersPer100Km = request.avgConsumptionLitersPer100Km,
+            fuelType = request.fuelType
         )
 
         val savedVehicle = vehicleRepository.save(updatedVehicle)

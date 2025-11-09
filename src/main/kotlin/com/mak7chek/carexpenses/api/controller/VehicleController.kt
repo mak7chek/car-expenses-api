@@ -17,15 +17,11 @@ class VehicleController(
     private val vehicleService: VehicleService
 ) {
 
-    /**
-     * Створити нове авто
-     */
     @PostMapping
     fun createVehicle(
         @RequestBody request: VehicleRequest,
-        @AuthenticationPrincipal userDetails: UserDetails? //
+        @AuthenticationPrincipal userDetails: UserDetails?
     ): ResponseEntity<VehicleResponse> {
-        // 2. Безпечно дістаємо email
         val userEmail = userDetails?.username
             ?: throw AccessDeniedException("Доступ заборонено: не вдалося ідентифікувати користувача")
 
@@ -33,12 +29,10 @@ class VehicleController(
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
-    /**
-     * Отримати список авто користувача
-     */
+
     @GetMapping
     fun getUserVehicles(@AuthenticationPrincipal userDetails: UserDetails?): ResponseEntity<List<VehicleResponse>> {
-        // Цей метод у тебе був майже правильний, але краще кидати помилку:
+
         val userEmail = userDetails?.username
             ?: throw AccessDeniedException("Доступ заборонено: не вдалося ідентифікувати користувача")
 
@@ -46,14 +40,12 @@ class VehicleController(
         return ResponseEntity.ok(vehicles)
     }
 
-    /**
-     * Оновити авто
-     */
+
     @PutMapping("/{id}")
     fun updateVehicle(
         @PathVariable id: Long,
         @RequestBody request: VehicleRequest,
-        @AuthenticationPrincipal userDetails: UserDetails? // 👈 1. Приймаємо nullable
+        @AuthenticationPrincipal userDetails: UserDetails?
     ): ResponseEntity<Any> {
         return try {
             // 2. Безпечно дістаємо email
@@ -69,13 +61,10 @@ class VehicleController(
         }
     }
 
-    /**
-     * Видалити авто
-     */
     @DeleteMapping("/{id}")
     fun deleteVehicle(
         @PathVariable id: Long,
-        @AuthenticationPrincipal userDetails: UserDetails? // 👈 1. Приймаємо nullable
+        @AuthenticationPrincipal userDetails: UserDetails?
     ): ResponseEntity<Any> {
         return try {
             // 2. Безпечно дістаємо email
