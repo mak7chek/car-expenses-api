@@ -9,14 +9,17 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
-
+import com.mak7chek.carexpenses.api.service.CsvExportService 
+import org.springframework.http.HttpHeaders
+import java.time.format.DateTimeFormatter
 data class NoteUpdateRequest(val notes: String?)
 
 
 @RestController
 @RequestMapping("/api/trips")
 class TripController(
-    private val tripService: TripService
+    private val tripService: TripService,
+    private val csvExportService: CsvExportService
 ) {
 
     private fun getUserEmail(userDetails: UserDetails?): String {
@@ -136,5 +139,30 @@ class TripController(
         } catch (e: AccessDeniedException) {
             ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.message)
         }
+    }
+    @GetMapping("/export")
+    fun exportTrips(
+        @AuthenticationPrincipal userDetails: UserDetails?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) vehicleId: Long?,
+        @RequestParam(required = false) dateFrom: LocalDate?,
+        @RequestParam(required = false) dateTo: LocalDate?,
+        @RequestParam(required = false) minDistance: Double?,
+        @RequestParam(required = false) maxDistance: Double?
+        ): ResponseEntity<String> {
+
+        val userEmail = getUserEmail(userDetails)
+        val trips = tripService.getTripsForUser(userEmail, search, vehicleId, dateFrom, dateTo,minDistance, maxDistance)
+
+        val csvData = csvExportService.exportTripsToCsv(trips)
+
+        val headers = HttpHeaders()
+        val filename = "trips_export_${LocalDate.now()}.csv"
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$filename\"")
+        headers.add(HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+
+        return ResponseEntity.ok()
+            .headers(headers)
+            .body(csvData)
     }
 }
