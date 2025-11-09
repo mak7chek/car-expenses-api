@@ -82,10 +82,15 @@ class TripController(
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) vehicleId: Long?,
         @RequestParam(required = false) dateFrom: LocalDate?,
-        @RequestParam(required = false) dateTo: LocalDate?
+        @RequestParam(required = false) dateTo: LocalDate?,
+        @RequestParam(required = false) minDistance: Double?,
+        @RequestParam(required = false) maxDistance: Double?
     ): ResponseEntity<List<TripResponse>> {
         val userEmail = getUserEmail(userDetails)
-        val trips = tripService.getTripsForUser(userEmail, search, vehicleId, dateFrom, dateTo)
+        val trips = tripService.getTripsForUser(
+            userEmail, search, vehicleId, dateFrom, dateTo,
+            minDistance, maxDistance
+        )
         return ResponseEntity.ok(trips)
     }
 

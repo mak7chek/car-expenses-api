@@ -50,4 +50,18 @@ object TripSpecification {
             builder.and(*predicates.toTypedArray())
         }
     }
+    fun isDistanceBetween(min: Double?, max: Double?): Specification<Trip> {
+        return Specification { root, query, builder ->
+            val predicates = mutableListOf<Predicate>()
+
+            if (min != null) {
+                predicates.add(builder.greaterThanOrEqualTo(root.get("totalDistanceKm"), min))
+            }
+            if (max != null) {
+                predicates.add(builder.lessThanOrEqualTo(root.get("totalDistanceKm"), max))
+            }
+
+            builder.and(*predicates.toTypedArray())
+        }
+    }
 }

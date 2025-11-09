@@ -29,7 +29,6 @@ class TripService(
 
     // --- DTO Маппери ---
 
-    // 4. "ЛЕГКИЙ" МАППЕР (для списків)
     private fun Trip.toResponse(): TripResponse {
         return TripResponse(
             id = this.id!!,
@@ -71,7 +70,6 @@ class TripService(
         )
     }
 
-    // --- CRUD Методи ---
 
     @Transactional
     fun startTrip(userEmail: String, request: TripStartRequest): TripResponse {
@@ -165,7 +163,9 @@ class TripService(
         search: String?,
         vehicleId: Long?,
         dateFrom: LocalDate?,
-        dateTo: LocalDate?
+        dateTo: LocalDate?,
+        minDistance: Double?,
+        maxDistance: Double?
     ): List<TripResponse> {
         val user = userRepository.findByEmail(userEmail)
             .orElseThrow { UsernameNotFoundException("Користувача не знайдено") }
@@ -175,6 +175,7 @@ class TripService(
         spec = spec.and(TripSpecification.containsNote(search))
         spec = spec.and(TripSpecification.hasVehicle(vehicleId))
         spec = spec.and(TripSpecification.isBetweenDates(dateFrom, dateTo))
+        spec = spec.and(TripSpecification.isDistanceBetween(minDistance, maxDistance))
 
         return tripRepository.findAll(spec)
             .map { it.toResponse() }
