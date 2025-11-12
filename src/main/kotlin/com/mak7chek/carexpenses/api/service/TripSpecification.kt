@@ -35,7 +35,6 @@ object TripSpecification {
         }
     }
 
-    // 4. Фільтр по даті
     fun isBetweenDates(from: LocalDate?, to: LocalDate?): Specification<Trip> {
         return Specification { root, query, builder ->
             val predicates = mutableListOf<Predicate>()

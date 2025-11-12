@@ -9,12 +9,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
-import com.mak7chek.carexpenses.api.service.CsvExportService 
+import com.mak7chek.carexpenses.api.service.CsvExportService
+import jakarta.validation.Valid
 import org.springframework.http.HttpHeaders
+import org.springframework.security.core.userdetails.UsernameNotFoundException
 import java.time.format.DateTimeFormatter
 data class NoteUpdateRequest(val notes: String?)
 
-
+data class TripPriceUpdateRequest(@field:Valid val newPricePerLiter: Double)
 @RestController
 @RequestMapping("/api/trips")
 class TripController(
@@ -164,5 +166,40 @@ class TripController(
         return ResponseEntity.ok()
             .headers(headers)
             .body(csvData)
+    }
+    @PostMapping("/utility/backfill-prices")
+    fun backfillOldTripPrices(
+        @AuthenticationPrincipal userDetails: UserDetails?
+    ): ResponseEntity<Any> {
+        return try {
+            val userEmail = getUserEmail(userDetails)
+            val result = tripService.backfillTripPrices(userEmail)
+            ResponseEntity.ok(result)
+        } catch (e: UsernameNotFoundException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
+        } catch (e: Exception) {
+            // Перехоплюємо загальні помилки, щоб скрипт не "помирав" мовчки
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.message)
+        }
+    }
+    @PutMapping("/{id}/price")
+    fun updateTripPrice(
+        @PathVariable id: Long,
+        @AuthenticationPrincipal userDetails: UserDetails?,
+        @RequestBody request: TripPriceUpdateRequest
+    ): ResponseEntity<Any> {
+        return try {
+            val userEmail = getUserEmail(userDetails)
+            val updatedTripDetails = tripService.updateTripPrice(id, userEmail, request.newPricePerLiter)
+            ResponseEntity.ok(updatedTripDetails)
+        } catch (e: NoSuchElementException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
+        } catch (e: AccessDeniedException) {
+            ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.message)
+        } catch (e: IllegalStateException) {
+            ResponseEntity.status(HttpStatus.CONFLICT).body(e.message) // На випадок, якщо поїздка не завершена
+        } catch (e: Exception) {
+            ResponseEntity.badRequest().body(e.message)
+        }
     }
 }

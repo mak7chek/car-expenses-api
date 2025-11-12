@@ -1,6 +1,7 @@
 package com.mak7chek.carexpenses.api.repository
 
 import com.mak7chek.carexpenses.api.model.Trip
+import com.mak7chek.carexpenses.api.model.User
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import org.springframework.data.jpa.repository.Query
@@ -16,4 +17,6 @@ interface TripRepository : JpaRepository<Trip, Long>, JpaSpecificationExecutor<T
 
     @Query("SELECT t FROM Trip t JOIN FETCH t.user u JOIN FETCH t.vehicle v LEFT JOIN FETCH t.routePoints WHERE t.id = :id")
     fun findTripWithDetails(@Param("id") id: Long): Optional<Trip>
+
+    fun findByUserAndCalculatedTotalCostIsNullAndEndTimeIsNotNull(user: User): List<Trip>
 }

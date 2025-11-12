@@ -20,5 +20,6 @@ data class FuelPrice(
     val fuelType: FuelType,
 
     @Column(nullable = false)
-    val pricePerLiter: Double
+    val pricePerLiter: Double,
+
 )

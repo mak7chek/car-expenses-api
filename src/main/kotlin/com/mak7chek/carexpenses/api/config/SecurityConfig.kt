@@ -27,7 +27,6 @@ class SecurityConfig(
 
             .authorizeHttpRequests { auth ->
                 auth
-                    // Дозволяємо доступ до твого AuthController
                     .requestMatchers("/auth/**")
                     .permitAll()
 

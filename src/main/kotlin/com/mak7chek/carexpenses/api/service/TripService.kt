@@ -2,6 +2,7 @@ package com.mak7chek.carexpenses.api.service
 
 import com.mak7chek.carexpenses.api.controller.NoteUpdateRequest
 import com.mak7chek.carexpenses.api.dto.*
+import com.mak7chek.carexpenses.api.model.FuelType
 import com.mak7chek.carexpenses.api.model.RoutePoint
 import com.mak7chek.carexpenses.api.model.Trip
 import com.mak7chek.carexpenses.api.repository.FuelPriceRepository
@@ -130,9 +131,9 @@ class TripService(
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
 
+        // ... ваша логіка розрахунку дистанції 'totalDistance' ...
         val points = trip.routePoints.sortedBy { it.timestamp }
         var totalDistance = 0.0
-
         if (points.size > 1) {
             for (i in 0 until points.size - 1) {
                 val p1 = points[i]
@@ -147,10 +148,28 @@ class TripService(
         val consumptionPer100Km = trip.vehicle.avgConsumptionLitersPer100Km
         val totalFuel = (totalDistance / 100.0) * consumptionPer100Km
 
+        // --- ⬇️ НОВА ЛОГІКА "ЗАМОРОЗКИ" ⬇️ ---
+
+        // 1. Отримуємо тип палива
+        val vehicle = trip.vehicle
+        val vehicleFuelType = vehicle.fuelType
+            ?: throw IllegalStateException("Помилка: Автомобіль ${vehicle.name} (ID: ${vehicle.id}) не має типу палива.")
+
+        // 2. Отримуємо ПОТОЧНУ ціну
+        val fuelPrice = fuelPriceRepository.findByUserAndFuelType(trip.user, vehicleFuelType)
+            .orElse(null)
+        val pricePerLiter = fuelPrice?.pricePerLiter ?: 0.0 // Використовуємо 0.0, якщо не задано
+
+        // 3. Розраховуємо фінальну вартість
+        val totalCost = totalFuel * pricePerLiter
+
+        // 4. Зберігаємо всі розраховані значення
         val finishedTrip = trip.copy(
             endTime = LocalDateTime.now(),
             totalDistanceKm = totalDistance,
-            totalFuelConsumedL = totalFuel
+            totalFuelConsumedL = totalFuel,
+            fuelPriceAtCreation = pricePerLiter, // ⬅️ Зберегли
+            calculatedTotalCost = totalCost      // ⬅️ Зберегли
         )
 
         tripRepository.save(finishedTrip)
@@ -189,14 +208,9 @@ class TripService(
         if (trip.user.email != userEmail) {
             throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
         }
-        val vehicle = trip.vehicle
-        val vehicleFuelType = vehicle.fuelType
-            ?: throw IllegalStateException("Помилка: Автомобіль ${vehicle.name} (ID: ${vehicle.id}) не має типу палива. Завершіть міграцію.")
-        val fuelPrice = fuelPriceRepository.findByUserAndFuelType(trip.user, vehicleFuelType)
-            .orElse(null)
-        val pricePerLiter = fuelPrice?.pricePerLiter ?: 0.0
 
-        val totalCost = trip.totalFuelConsumedL * pricePerLiter
+        val pricePerLiter = trip.fuelPriceAtCreation ?: 0.0
+        val totalCost = trip.calculatedTotalCost ?: 0.0
 
         return trip.toDetailResponse(pricePerLiter, totalCost)
     }
@@ -225,5 +239,82 @@ class TripService(
         }
 
         tripRepository.delete(trip)
+    }
+    @Transactional
+    fun updateTripPrice(tripId: Long, userEmail: String, newPricePerLiter: Double): TripDetailResponse {
+        val trip = tripRepository.findById(tripId)
+            .orElseThrow { NoSuchElementException("Поїздку з ID $tripId не знайдено") }
+
+        if (trip.user.email != userEmail) {
+            throw AccessDeniedException("Ви не маєте доступу до цієї поїздки")
+        }
+
+        if (trip.endTime == null) {
+            throw IllegalStateException("Неможливо оновити ціну для поїздки, яка ще не завершена.")
+        }
+
+        // Перераховуємо загальну вартість з новою ціною
+        val newTotalCost = trip.totalFuelConsumedL * newPricePerLiter
+
+        // Оновлюємо "заморожені" поля
+        trip.fuelPriceAtCreation = newPricePerLiter
+        trip.calculatedTotalCost = newTotalCost
+
+        val savedTrip = tripRepository.save(trip)
+
+        // Повертаємо оновлені деталі
+        return savedTrip.toDetailResponse(newPricePerLiter, newTotalCost)
+    }
+
+    @Transactional
+    fun backfillTripPrices(userEmail: String): Map<String, Any> {
+        val user = userRepository.findByEmail(userEmail)
+            .orElseThrow { UsernameNotFoundException("Користувача не знайдено") }
+
+        // 1. Знаходимо всі "старі" завершені поїздки, де немає ціни
+        val tripsToUpdate = tripRepository.findByUserAndCalculatedTotalCostIsNullAndEndTimeIsNotNull(user)
+
+        if (tripsToUpdate.isEmpty()) {
+            return mapOf("message" to "Не знайдено старих поїздок для оновлення. Все вже актуально.", "updatedCount" to 0)
+        }
+
+        var updatedCount = 0
+        val tripsToSave = mutableListOf<Trip>()
+
+        // 2. Створимо кеш цін, щоб не питати базу 100 разів про одне й те саме
+        val priceCache = mutableMapOf<FuelType, Double>()
+
+        for (trip in tripsToUpdate) {
+            val vehicle = trip.vehicle
+            // Якщо у авто не вказано тип палива, ми не можемо розрахувати ціну.
+            val fuelType = vehicle.fuelType ?: continue
+
+            // 3. Беремо ціну з кешу або (якщо немає) з бази
+            //    Використовуємо ПОТОЧНУ ціну як найкраще припущення для старих поїздок
+            val pricePerLiter = priceCache.getOrPut(fuelType) {
+                fuelPriceRepository.findByUserAndFuelType(user, fuelType)
+                    .map { it.pricePerLiter }
+                    .orElse(0.0) // Якщо ціни немає, ставимо 0.0
+            }
+
+            // 4. Розраховуємо вартість
+            val totalCost = trip.totalFuelConsumedL * pricePerLiter
+
+            // 5. Оновлюємо "заморожені" поля
+            trip.apply {
+                fuelPriceAtCreation = pricePerLiter
+                calculatedTotalCost = totalCost
+            }
+            tripsToSave.add(trip)
+            updatedCount++
+        }
+
+        // 6. Зберігаємо всі оновлені поїздки одним запитом
+        tripRepository.saveAll(tripsToSave)
+
+        return mapOf(
+            "message" to "Успішно оновлено $updatedCount старих поїздок.",
+            "updatedCount" to updatedCount
+        )
     }
 }
